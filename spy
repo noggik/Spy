@@ -1,0 +1,178 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+-- Fluent UI Library
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+-- Target position (you can modify this or make it dynamic)
+local targetPos = Vector3.new(-2.94525766, 0.747207999, 14.6082296)
+
+-- Create Window
+local Window = Fluent:CreateWindow({
+    Title = "Fluent " .. Fluent.Version,
+    SubTitle = "Upgrade Helper",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- Create Tabs
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+-- Upgrade options
+local upgradeOptions = {"Luck", "CatchTime", "FishWorth"}
+
+-- Create Dropdown for upgrades
+local UpgradeDropdown = Tabs.Main:AddDropdown("UpgradeSelect", {
+    Title = "Upgrade Selection",
+    Description = "Select upgrades to automate",
+    Values = upgradeOptions,
+    Multi = true,
+    Default = {}
+})
+
+-- Variables to store connections and selected upgrades
+local autoUpgradeConnection = nil
+local autoMovementConnection = nil
+local selectedUpgrades = {}
+
+-- Update selected upgrades
+UpgradeDropdown:OnChanged(function(Value)
+    selectedUpgrades = {}
+    for upgrade, state in next, Value do
+        if state then
+            table.insert(selectedUpgrades, upgrade)
+        end
+    end
+end)
+
+-- Function to start auto upgrade
+local function StartAutoUpgrade()
+    if autoUpgradeConnection then 
+        autoUpgradeConnection:Disconnect() 
+        autoUpgradeConnection = nil 
+    end
+    
+    autoUpgradeConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        for _, upgrade in ipairs(selectedUpgrades) do
+            local args = {
+                [1] = "ZoneUpgrades",
+                [2] = "VodoemZone1",
+                [3] = upgrade
+            }
+            ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BuyUpgrade"):FireServer(unpack(args))
+        end
+        task.wait(0.5)  -- Small delay to prevent potential rate limiting
+    end)
+end
+
+-- Function to stop auto upgrade
+local function StopAutoUpgrade()
+    if autoUpgradeConnection then
+        autoUpgradeConnection:Disconnect()
+        autoUpgradeConnection = nil
+    end
+end
+
+-- Function to start auto movement
+local function StartAutoMovement()
+    if autoMovementConnection then 
+        autoMovementConnection:Disconnect() 
+        autoMovementConnection = nil 
+    end
+    
+    autoMovementConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        local character = player.Character
+        if character then
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character:FindFirstChild("Humanoid")
+            
+            if humanoidRootPart and humanoid then
+                humanoid:MoveTo(targetPos)
+            end
+        end
+    end)
+end
+
+-- Function to stop auto movement
+local function StopAutoMovement()
+    if autoMovementConnection then
+        autoMovementConnection:Disconnect()
+        autoMovementConnection = nil
+        
+        -- Stop movement
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid:MoveTo(character.HumanoidRootPart.Position)
+            end
+        end
+    end
+end
+
+-- Upgrade Toggle
+local UpgradeToggle = Tabs.Main:AddToggle("UpgradeToggle", {
+    Title = "Auto Upgrade", 
+    Description = "Automatically purchase selected upgrades",
+    Default = false,
+    Callback = function(state)
+        if state then
+            -- Check if any upgrades are selected
+            if #selectedUpgrades > 0 then
+                StartAutoUpgrade()
+            else
+                -- Warn if no upgrades are selected
+                Fluent:Notify({
+                    Title = "No Upgrades Selected",
+                    Content = "Please select at least one upgrade",
+                    Duration = 3
+                })
+                -- Turn off the toggle
+                Options.UpgradeToggle:SetValue(false)
+            end
+        else
+            StopAutoUpgrade()
+        end
+    end 
+})
+
+-- Movement Toggle
+local MovementToggle = Tabs.Main:AddToggle("MovementToggle", {
+    Title = "Auto Movement", 
+    Description = "Automatically move to target position",
+    Default = false,
+    Callback = function(state)
+        if state then
+            StartAutoMovement()
+        else
+            StopAutoMovement()
+        end
+    end 
+})
+
+-- Optional: Add a button to set current position as target
+Tabs.Main:AddButton({
+    Title = "Set Current Position",
+    Description = "Set current position as movement target",
+    Callback = function()
+        local character = player.Character
+        if character then
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                targetPos = humanoidRootPart.Position
+                Fluent:Notify({
+                    Title = "Position Updated",
+                    Content = "Current position set as movement target",
+                    Duration = 3
+                })
+            end
+        end
+    end
+})
